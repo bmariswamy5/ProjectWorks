@@ -1,0 +1,710 @@
+---
+title: "Multinatinal Bank Customer Churn"
+output: 
+  html_document:
+    theme: "readable"
+    highlight: kate
+    code_folding: hide
+    number_sections: false
+    toc: yes
+    toc_depth: 6
+    toc_float: yes
+    collapsed: false
+    smooth_scroll: false
+  pdf_document:
+    toc: yes
+    toc_depth: '3'
+  # prettydoc::html_pretty:
+  #   theme: cayman
+  #   highlight: github 
+---
+
+```{r  include=FALSE,echo=FALSE}
+library(knitr)
+library(ezids)
+loadPkg("Hmisc") 
+library(dplyr)
+loadPkg("MASS")
+library(ggplot2)
+knitr::opts_chunk$set(warning = F, message = F,echo=FALSE)
+options(scientific=T, digits = 3) 
+```
+
+```{css}
+.columns {display: flex;}
+h1 {color: maroon;font-family: Arial;}
+h2 {color: navy;font-family: Arial;}
+h3 {color: darkgreen;font-family: Arial;}
+body{color: black;font-family:Arial;text-align: justify;}
+```
+
+# Chapter 1: Introduction
+
+Customer churn, also known as customer turnover, occurs when a customer chooses to leave or unsubscribe from a service for any reason. In the context of this project, we are looking at customer churn in banking. Being able to predict customer churn is important because we want to retain as many customers as we can. (Kaemingk, 2018.)
+
+Of course you want to keep customers, but it also is cheaper to retain your customers, than having to spend money to acquire new customers to replace the ones that left. Lower customer acquisition costs equal more profits. By identifying customers at risk of churn, we are able to identify which efforts in order to maximize their likelihood of staying. (Guliyev et al., 2021.)
+
+We chose to analyze a multinational bank's churn for several reasons. As an international team, we were interested in topics that spanned multiple countries, with a particular focus on either business or environment, our personal interests. When we were pitching topics, nearly every suggestion was geared towards sales or customer experience, or global environmental issues.
+
+The aim of this project is to identify the most useful model for predicting churn churn, across three countries serviced by a multinational bank. 
+
+## Customer Analysis Overview
+
+From our EDA in the mid term we found that more than 50% of the customer are based in France with majority of customer of average age group of 39 being in relation with bank for more than a year,51% of active customers while Male customers are predominantly higher than Female customers and also 71% of the customer uses credit card with average credit score of 650 by this analysis we found that 20% of the customer are churned,hence we decided to predict what factors are significantly affecting the customer churn in multinational bank.The model identified can then be used to inform banks of what customer activity trends and attributes should be monitored so the bank can make efforts to retain the customers before the account has been closed.
+
+# Chapter 2: Description of the Data
+
+This study is based on a data set that contains 10,000 observations of bank customers with 12 variables. (See below for a readout of the dataset's structure and variable names.) Variable descriptions are as follows and we choose the data set from [Kaggle](https://www.kaggle.com/code/tamunoyedarego/abc-multinational-bank-customer-analysis) (Topre, 2022.)
+
+```{r Churn_data_file, include=T,echo=FALSE,results='apois'}
+churn_data<-data.frame(read.csv("Bank_Customer_Churn_Prediction.csv",header=TRUE)) 
+str(churn_data) 
+```
+
+1.  **Customer ID** - The Unique ID of each individual customer
+2.  **Credit Score** - A number depicting the customer's creditworthiness
+3.  **Country** - The country the customer banks from
+4.  **Gender** - The gender the customer identifies with
+5.  **Age** - The customers age
+6.  **Tenure** - Indicates how length in years the customer has been with the bank
+7.  **Balance** - The amount currently available in the customer's account
+8.  **Products Number** - The number of products purchased by the customer through the bank
+9.  **Credit Card** - Indicates the customer has a credit card
+10. **Active Member** - Indicates if the customer is an active or inactive
+11. **Estimated Salary** - Bank Estimation of the income of the customer
+12. **Churn** - Indicator of if the customer has left the bank or not
+
+# Chapter 3: Independent Variables EDA Recap
+
+#### Cleaning the Data
+
+In preparation for exploratory data analysis, we took several steps to clean the data. We immediately dropped the customer_id variable, as we do not need the account holder's unique identifier for our purpose. After dropping customer_id our dataset had 11 variables:
+
+```{r Remove cutomer_id from the dataframe, include=TRUE, echo=FALSE,result='asis'}
+churn_data <- churn_data[-c(1)] # removing column 1(customer _id) from data set
+str(churn_data)
+```
+
+Next, we checked for duplicate records in the data set,we found no duplicates in the data set and also checked for null variables, and 0 were found.We then converted the following variables into categorical variables:credit_card, active_member, churn, gender, tenure, product number, age.We also converted Boolean values (0,1) into character format for Credit_card (credit_card,no-credit card), active_members (Active,In Active) and churn (Churned, Retained) variables in the data set, in order to understand each variable in the data set clearly during plotting and analysis.
+
+```{r  include=TRUE,echo=FALSE,result='apois'}
+library(knitr)
+churn_data$active_member[churn_data$active_member== 1]<-"Active"
+churn_data$active_member[churn_data$active_member== 0]<-"In Active"
+
+churn_data$credit_card[churn_data$credit_card== 1]<-"Credit Card"
+churn_data$credit_card[churn_data$credit_card== 0]<-"No-Credit Card"
+
+churn_data$churn[churn_data$churn== 1]<-"Churned"
+churn_data$churn[churn_data$churn== 0]<-"Retained"
+kable(head(churn_data[,c(8,9,11)]))
+```
+
+Finally, we checked our continuous variables for outliers using the outlierKD function.
+
+```{r customer_credit_score,include=TRUE, echo=FALSE,result='asis'}
+credit_score_clean <- outlierKD2(churn_data, credit_score, rm = TRUE, boxplt = TRUE, qqplt = TRUE)
+age_clean <- outlierKD2(churn_data, age, rm = TRUE, boxplt = TRUE, qqplt = TRUE)
+```
+
+By using the outlierKD function we can observe that outliers were found only in `age` and `credit_score` variables (age: 3.7% and credit_score: 0.2%), so we decided to remove these two variables using the outlierKD function.
+
+## Customer Analysis Review
+
+In this section we are going to analyze each variable in the Bank churn dataset by using plots along with finding calculated mean, SD and percentages for each variable.
+
+### What is the average credit score of the customers?
+
+The average credit score of the customer is 650.529,most of the customers having credit score fall between 600 to 700 and standard deviation is 96.953. The below histogram shows the range of credit scores.
+
+```{r Credit_score}
+library(ggplot2)
+ggplot(data=churn_data, aes(x=credit_score)) + 
+  geom_histogram(col="black",bins=30,
+                 fill="dark orange", 
+                  alpha =.7) + # opacity
+  labs(title="`ggplot`") +
+  labs(title="Customer's Credit Scores",x="Customer Credit Score", y="Customer Count") 
+```
+
+### Which are the different countries in which a customer holds a bank account?
+
+The customers are grouped by the countries in which they have their accounts. As we see from the plot, France has more than 50% of customer accounts which is the highest among all other countries with Germany and Spain sharing equal percentages.Below, bar plot represents the number of customers in three different countries.
+
+```{r Country}
+ggplot(data=churn_data,aes(x=country,fill=country))+
+  geom_bar(col="black")+
+  scale_fill_brewer(palette="Reds") +
+  labs(title = "Bank Customer vs Country",x="Country",y="Customer Count")+
+  theme_minimal()
+```
+
+### What is the average age of the customer?
+
+The majority of the bank customers fall below the age of 50 with average age of 39 and with standard deviation of 10.5.
+
+```{r Age}
+ggplot(churn_data, aes(x = age,fill=cut(age,100))) + 
+  geom_histogram(show.legend = FALSE,col="black",bins=30)+
+  scale_fill_discrete(h=c(240,10),c=120,l=70)+
+  theme_minimal()+
+  labs(x=" Customer Age",y=" Customer Count")+
+  ggtitle("Customer ages")
+```
+
+### How many years does the customer have a relationship with the bank?
+
+Most of the customers have been with the bank for more than a year.
+
+```{r tenure}
+library(ggplot2)
+ggplot(data=churn_data, aes(x=tenure)) + 
+  geom_histogram(col="black",bins=11,
+                 fill="Yellow", 
+                  alpha =.7) + 
+  labs(title="Years spent as customer",x="Number of years", y="Customer Count") 
+```
+
+### What is the percentage of Male and Female customers who hold an account in the bank?
+
+The bank's customers are predominantly male which make up 55% of the customer base with the females making up the remaining 45%.
+
+```{r Gender}
+df <- churn_data %>% 
+  group_by(gender) %>% # Variable to be transformed
+  count() %>% 
+  ungroup() %>% 
+  mutate(perc = `n` / sum(`n`)) %>% 
+  arrange(perc) %>%
+  mutate(labels = scales::percent(perc))
+
+
+ggplot(df, aes(x = "", y = perc, fill =gender )) +
+  geom_col(color="black") +
+  geom_text(aes(label = labels),color = c("black", "black"),
+            position = position_stack(vjust = 0.5)) +
+  coord_polar(theta = "y")+
+  labs(title="Percentage of Male and Female customers in bank",x="", y="") 
+```
+
+### What is the percentage of Active and Inactive account holders in the bank?
+
+48.5% of customers are being inactive.
+
+```{r Active_Memebers}
+df <- churn_data %>% 
+  group_by(active_member) %>% # Variable to be transformed
+  count() %>% 
+  ungroup() %>% 
+  mutate(perc = `n` / sum(`n`)) %>% 
+  arrange(perc) %>%
+  mutate(labels = scales::percent(perc))
+
+ggplot(df, aes(x = "", y = perc, fill = active_member)) +
+  geom_col(color="black") +
+  geom_label(aes(label = labels),color = c("black", "white"),
+             position = position_stack(vjust = 0.5),
+             show.legend = FALSE) +
+  coord_polar(theta = "y")+
+  scale_fill_grey()+
+  labs(title="Percentage of active members in bank",x="", y="") 
+```
+
+### What are the different types of services/Products purchased by customers provided by the bank for better usage of baking services?
+
+Most of the customers use product 1 which is 50% and product 4 is the least used with 0.6%.
+
+```{r Products}
+df <- churn_data %>% 
+  group_by(products_number) %>% # Variable to be transformed
+  count() %>% 
+  ungroup() %>% 
+  mutate(perc = `n` / sum(`n`)) %>% 
+  arrange(perc) %>%
+  mutate(labels = scales::percent(perc))
+
+
+ggplot(df, aes(x = "", y = perc, fill = products_number)) +
+  geom_col(color="black") +
+  geom_label(aes(label = labels),color = c("white", "white","white","white"),
+             position = position_stack(vjust = 0.5),
+             show.legend = FALSE) +
+  coord_polar(theta = "y")+
+  labs(title="Percentage of  different products used by customers ",x="", y="") 
+  
+```
+
+### What percentage of customers make use of credit cards?
+
+Predominantly 71% of the Bank customers use credit card and only 29% do not.
+
+```{r Credit_Card}
+df <- churn_data %>% 
+  group_by(credit_card) %>% # Variable to be transformed
+  count() %>% 
+  ungroup() %>% 
+  mutate(perc = `n` / sum(`n`)) %>% 
+  arrange(perc) %>%
+  mutate(labels = scales::percent(perc))
+
+
+ggplot(df, aes(x = "", y = perc, fill = credit_card)) +
+  geom_col(color="black") +
+  geom_label(aes(label = labels),color = c("black", "black"),
+             position = position_stack(vjust = 0.5),
+             show.legend = FALSE) +
+  coord_polar(theta = "y")+
+  scale_fill_brewer(palette="Greens")+
+  labs(title="Percentage of customer use credit card",x="", y="") 
+```
+
+### Currently what percentage of customers are churned from the bank?
+
+The bank managed to retain 80% of their customers with the remaining 20% where churned out.
+
+```{r Customer_churn}
+df <- churn_data %>% 
+  group_by(churn) %>% 
+  count() %>% 
+  ungroup() %>% 
+  mutate(perc = `n` / sum(`n`)) %>% 
+  arrange(perc) %>%
+  mutate(labels = scales::percent(perc))
+
+
+ggplot(df, aes(x = "", y = perc, fill = churn)) +
+  geom_col(color="black") +
+  geom_label(aes(label = labels),color = c("black", "black"),
+             position = position_stack(vjust = 0.5),
+             show.legend = FALSE) +
+  coord_polar(theta = "y")+
+  scale_fill_brewer(palette="Purples")+
+  labs(title="Percentage of customer retained",x="", y="") 
+```
+
+So, now the big question was what factors affected the 20% churn rate in the multinational bank across different countries. We utilized chi-squared tests, two-sample T-tests, and corrplots in order to find which factors influenced customer churn:
+
+### Variables' Influence on Churn
+
+```{r Correlation between balance and customer churn, include=FALSE, echo=FALSE}
+library(corrplot)
+churn_data_to_numeric <- churn_data
+
+churn_data$churn[churn_data$churn== "Churned"]<-1
+churn_data$churn[churn_data$churn== "Retained"]<-0
+
+
+churn_data_to_numeric$churn <- as.numeric(churn_data_to_numeric$churn) 
+
+churn_data_numeric <- select_if(churn_data_to_numeric, is.numeric)
+
+cors_bal <- cor(churn_data_numeric)
+corrplot(cors_bal, method = 'square')
+
+cor_balance <- cor(churn_data_numeric$balance, churn_data_numeric$churn)
+cor_balance
+```
+
+```{r Correlation between balances and customer churn, include=TRUE, echo=FALSE}
+library(corrplot)
+churn_data_to_numeric <- churn_data
+churn_data_to_numeric$churn <- as.numeric(churn_data_to_numeric$churn) 
+
+churn_data_numeric <- select_if(churn_data_to_numeric, is.numeric)
+
+cors_bal <- cor(churn_data_numeric)
+corrplot(cors_bal, method = 'number')
+
+cor_balance<-cor.test(churn_data$balance,as.numeric(churn_data$churn), method="pearson")
+cor_balance
+```
+
+**From the correlation plot we observe that age is highly correlated with churn.After combining different columns and finding the correlation score we see that it starts decreasing from 0.285**
+
+```{r Correlation combining multiple variables, results='markup', include=TRUE}
+corr <- cor(churn_data_numeric$age, churn_data_numeric$churn)
+corr
+corr1 <- cor(churn_data_numeric$age + churn_data_numeric$tenure, churn_data_numeric$churn)
+corr1
+corr2 <- cor(churn_data_numeric$age + churn_data_numeric$products_number, churn_data_numeric$churn)
+corr2
+corr3 <- cor(churn_data_numeric$age + churn_data_numeric$balance, churn_data_numeric$churn)
+corr3
+corr4 <- cor(churn_data_numeric$age + churn_data_numeric$tenure + churn_data_numeric$products_number, churn_data_numeric$churn)
+corr4
+corr5 <- cor(churn_data_numeric$age + churn_data_numeric$products_number + churn_data_numeric$balance, churn_data_numeric$churn)
+corr5
+
+```
+
+
+# Chapter 4: Handling Imbalanced Data
+
+In our EDA, we found out that our binary target variable, churn, was imbalanced with 7963 instances of 0/Retained customers, and 2037 instances of 1/Churned customers.
+
+```{r, results='asis'}
+ggplot(data=churn_data,aes(x=churn,fill=churn))+
+  geom_bar(col="black")+
+  scale_fill_brewer(palette="Reds") +
+  labs(title = "Frequency of Retained and Churned Customers \n 0=Retained 1=Churned",x="Churned",y="Customer Count")+
+  theme_minimal()
+```
+
+With 79.6% of customers 0/Retained, and 20.45 of customers 1/Churned, we needed to balance our dataset and bring this number closer to a 50/50 split for the purpose of our training set. We utilized the ovun.sample function from ROSE package to undersample the data, and result in a more even split. With the new proportions, we are ready to train-test-split and proceed:
+
+```{r count of churn after oversampling}
+library(ROSE)
+ind <- sample(2, nrow(churn_data), replace = TRUE, prob = c(0.7, 0.3))
+train <- churn_data[ind==1,]
+test <- churn_data[ind==2,]
+data_balanced_over <- ovun.sample(churn ~ ., data = train, method = "over",N = 10000,seed=123)$data
+```
+
+```{r}
+ggplot(data=data_balanced_over,aes(x=churn,fill=churn))+
+  geom_bar(col="black")+
+  scale_fill_brewer(palette="Reds") +
+  labs(title = "Frequency of Retained and Churned Customers after Oversampling \n 0=Retained 1=Churned",x="Churned",y="Customer Count")+
+  theme_minimal()
+```
+
+# Chapter 5: SMART QUESTIONS
+
+
+Before we work on PCA, we need to ensure that the data is scaled and all the variables are either numeric or int type.
+
+```{r, Scaling data}
+str(churn_data)
+churn_data_pc<-data_balanced_over
+churn_data_pc$country[churn_data$country == 'France'] <- 0
+churn_data_pc$country[churn_data$country == 'Germany'] <- 1
+churn_data_pc$country[churn_data$country == 'Spain'] <- 2
+
+churn_data_pc$gender[churn_data$gender == 'Male'] <- 0
+churn_data_pc$gender[churn_data$gender == 'Female'] <- 1
+
+churn_data_pc$credit_card[churn_data$credit_card == 'No-Credit Card'] <- 0
+churn_data_pc$credit_card[churn_data$credit_card == 'Credit Card'] <- 1
+
+churn_data_pc$active_member[churn_data$active_member == 'In Active'] <- 0
+churn_data_pc$active_member[churn_data$active_member == 'Active'] <- 1
+
+churn_data_pc$active_member = as.numeric(churn_data_pc$active_member)
+churn_data_pc$credit_card = as.numeric(churn_data_pc$credit_card)
+churn_data_pc$country = as.numeric(churn_data_pc$country)
+churn_data_pc$credit_score = as.numeric(churn_data_pc$credit_score)
+churn_data_pc$gender = as.numeric(churn_data_pc$gender)
+churn_data_pc$churn = as.numeric(churn_data_pc$churn)
+
+churn_data_pc_target = churn_data_pc #includes 'churn'
+```
+
+To perform dimensiontionality reduction while preserving as much as randomness in the high dimensional space as possible. 
+
+Now we will identify correlations in the data
+```{r}
+churn_data_logit <- churn_data_pc_target
+str(churn_data_logit)
+```
+
+```{r}                                        
+churn_data_pc <- churn_data_logit[-c(11)] #No churn
+str(churn_data_pc)
+```
+
+```{r}
+churn_data_scale <- data.frame(scale(churn_data_pc))
+xkabledply(cor(churn_data_scale))
+xkabledply(cov(churn_data_scale))
+
+```
+## Linear Regression 
+
+### Does the combination of customer demographic variables **country**, **age group**, **gender** influence the **churn rate** of the customers? 
+
+```{r LMmodel1,results='markup'}
+
+churnLM <- lm(churn~country+age+gender,data=churn_data_pc_target)
+summary(churnLM)
+
+```
+From the results of linear regression model we observe that the variables Country$Germany,age,and Gender are highly significant.While gender is negatively impacting the customer churn but customer with certain age group and from Germany affecting the churn rate positively.
+
+### Whether the customers using **fewer products** with higher **salary**,**account balance** and **status** of the account affect the churn rate?
+
+```{r LMmodel2,results='markup'}
+churnLM2 <- lm(churn~products_number+estimated_salary+balance+active_member,data=churn_data_pc_target)
+summary(churnLM2)
+```
+From the results of linear regression model we observe that the variables account balance,account status are highly significant.while the account status impacting the customer churn negatively,but account balance is affecting positively.
+
+
+## Finding the Best Model
+
+### What are the **principal components** for predicting churn rate?
+```{r, PCA}
+pr.out=prcomp(churn_data_pc, scale =TRUE)
+print("Case: z-score/scaled")
+summary(pr.out)
+pr.out$rotation
+```
+
+Correlation can vary from -1 to +1
+Value close to +1 indicates a high degree of positive correlation
+Value close to -1 indicates a high degree of negative correlation
+Value close to zero or 0 indicates no correlation at all
+
+```{r}
+nrow(train)
+prop.table( table(train$churn) )
+```
+
+```{r, Biplot}
+biplot(pr.out, scale = 0)
+biplot(pr.out,2:3, scale =0)
+biplot(pr.out,3:4, scale =0)
+```
+
+From the Biplot between PC1 and PC2 , first of all, it shows the data points plotted (projection) onto the PC1-PC2 plane, 
+with the scales on the bottom and the left tick marks. It also shows the components on this PC1-PC2 plane, 
+with the scales on the top and right tick marks showing the loadings.
+
+PC1 has more variation than PC2
+
+We have also plotted the graphs in between PC2-PC3, AND PC3-PC4: Observe that PC2 has more variation than PC3 and PC3 has more variation than PC4
+
+Here, all components capture the majority of the variability.
+
+```{r, Proportion of variance explained}
+pr.var <- (pr.out$sdev^2)
+pve <- pr.var/sum(pr.var)
+plot(cumsum(pve), xlab="Principal Component (standardized)", ylab ="Cumulative Proportion of Variance Explained",ylim=c(0,1),type="b")
+```
+
+From the graph for Proportion of variance we can see that almost 90% of variance is explained by 9 principal components.
+
+
+
+### Feature Selection
+
+##### Which model can give the **best results** based on adjusted R square value, along with lower BIC and Cp?
+
+**Feature selection using Exhaustive Search**
+
+```{r, results='asis'}
+loadPkg("leaps")
+
+reg.churn <- regsubsets(churn~., data = churn_data_pc_target, nvmax =9, nbest = 1, method = "exhaustive")  
+plot(reg.churn , scale = "adjr2", main = "Adjusted R^2")
+plot(reg.churn , scale = "bic", main = "BIC")
+plot(reg.churn , scale = "Cp", main = "Cp")
+
+```
+
+Using exhaustive search age,balance were selected  which is a two variable model with adjusted R^2 value 0.14.
+
+The  best model selected using BIC is credit_score,age,balance which is a 3 variable model with BIC value -1500.
+
+The best model selected using Cp is credit_score,age,tenure,balance,estimated_salary which is a 5 variable model. with Cp value 7.
+
+**Mallow Cp Plot**
+The Mallow Cp plot selected two best models.
+
+1)credit_score,country,gender,age,tenure,balance,active_member,estimated salary 8 variable model
+
+2)credit_score,country,gender,age,tenure,balance,estimated_salary.
+
+**Feature selection using forward search**
+
+```{r}
+reg.churnforward <- regsubsets(churn~., data = churn_data_pc_target, nvmax =9, nbest = 1, method = "forward")
+plot(reg.churnforward , scale = "adjr2", main = "Adjusted R^2")
+plot(reg.churnforward , scale = "bic", main = "BIC")
+plot(reg.churnforward , scale = "Cp", main = "Cp")
+
+```
+
+The best model selected using forward search is age,balance which is a 2 variable model with adjusted R^2 value of 0.14.
+
+The best model selected using BIC is credit_card,age,balance which is a 3 variable model with value -1500 Cp.
+
+The best model selected using Cp is credit_score,age,tenure,balance,estimated_salary which is a 5 variable model with Cp value 7.
+
+**Feature selection using backward search**
+
+```{r}
+reg.churnback <- regsubsets(churn~., data = churn_data_pc_target, method = "backward", nvmax = 9, nbest = 1)
+plot(reg.churnback, scale = "adjr2", main = "Adjusted R^2")
+plot(reg.churnback, scale = "bic", main = "BIC")
+plot(reg.churnback, scale = "Cp", main = "Cp")
+
+```
+
+The best model selected using backward search is age,balance which is a 2 variable model with adjusted R^2 value of 0.14.
+
+The  best model selected using BIC is credit_card,age,balance which is a 3 variable model with value -1500 Cp.
+
+The best model selected using Cp is credit_score,age,tenure,balance,estimated_salary which is a 5 variable model with Cp value 7.
+
+**Feature selection using Sequential Replacement**
+
+```{r}
+
+reg.churnseqrep <- regsubsets(churn~., data =churn_data_pc_target, nvmax = 9, nbest = 1 , method = "seqrep")
+plot(reg.churnseqrep, scale = "adjr2", main = "Adjusted R^2")
+plot(reg.churnseqrep, scale = "bic", main = "BIC")
+plot(reg.churnseqrep, scale = "Cp", main = "Cp")
+```
+
+The best model selected using sequential search is age,balance which is a 2 variable model with adjusted R^2 value of 0.14.
+
+The best model selected using BIC is credit_card,age,balance,estimated_salary which is a 4 variable model with value -1500 Cp.
+
+The best model selected using Cp is credit_score,age,tenure,balance,estimated_salary which is a 5 variable model with Cp value 7.
+
+**The best models selected using feature selection methods are**
+
+**1 Age, balance(2 variable model)**
+
+-   Forward search: Adj R\^2,
+
+-   Exhaustive search: Adj R\^2
+
+-   Backward search: Adj R\^2
+
+-   Sequential search:Adj R\^2
+
+**2 Credit_score,age,balance(3 variable model)**
+
+-   Forward search: BIC
+
+-   Exhaustive search: BIC
+
+-   Backward search: BIC
+
+-   Sequential search:BIC
+
+**3 Credit_score,age,tenure,balance,estimated_salary(5 variable model)**
+
+-   Exhaustive search: CP
+
+-   Forward search: CP
+
+-   Backward search: CP
+
+-   Sequential search:CP
+
+**4.Credit_score, country, gender, age, tenure, balance, estimated_salary(7 variable model)**
+
+-   Mallow CPG
+
+**5 Credit_score,country,gender,age,tenure,balance,active_member,estimated_salary(8 variable model)**
+
+-   Mallow CPG
+
+# Chapter 6: Comparing the Models Chosen in Feature Selection
+
+### Methods of Model Evaluation
+
+When evaluating the models, we are **focusing particularly on False negatives** because it is vital for any bank to correctly predict churn and in an ideal scenario without any errors. False negatives are of highest importance as we do not want to incorrectly predict that the customers are retained, when they are in fact churned.
+
+The second way we will be evaluating the models is by Area Under the Curve. The higher this number is, the better our model.
+
+Model with all variables:
+
+```{r, Logistic Regression,results='markup'}
+churn_data_logit <- churn_data_pc_target
+
+churn_logit <- glm(churn ~., data = churn_data_logit, family = 'binomial')
+
+summary(churn_logit)
+```
+
+**Model 1 - churn \~ age + balance**
+Looking at the Adjusted R square results we can see that we get a maximum value of 0.14 with 2 variables namely age and balance for exhaustive search method. If we look at the variables that give the same value of 0.14 for Adjusted R square for forward, backward and sequential search we have the same variables age and balance. Therefore, we build model1 with parameters age and balance. 
+```{r Model1,results='markup'}
+loadPkg("regclass")
+loadPkg("pROC") 
+churnglm1 <- glm(churn ~  age + balance, data = churn_data_logit)
+summary(churnglm1)
+xkabledply( confusion_matrix(churnglm1), title = "Confusion matrix from Logit Model-1" )
+prob1=predict(churnglm1, type = "response" )
+churn_data_logit$prob=prob1
+h1 <- roc(churn~prob, data = churn_data_logit)
+auc(h1) 
+plot(h1)
+```
+
+**Model 2 - churn \~ credit_card+age + balance**
+Similarly, for the second model looking at the BIC values we can see that from feature selection we have a minimum value of -1500 from exhaustive search method with 3 variables namely credit_score, age and balance. We can see the same variables associated in both forward search and backward search. For sequential search, we have an additional variable estimated_salary along with the other three variables. Therefore, if you take the variables common in all these search techniques we are left with credit_score, age and balance so we build model2 with these variables.
+```{r Model2,results='markup'}
+churnglm2 <- glm(churn ~  credit_card+age + balance, data = churn_data_logit)
+summary(churnglm2)
+xkabledply( confusion_matrix(churnglm2), title = "Confusion matrix from Logit Model-2" )
+prob2=predict(churnglm2, type = "response" )
+churn_data_logit$prob=prob2
+h2 <- roc(churn~prob, data = churn_data_logit)
+auc(h2) 
+plot(h2)
+```
+
+**Model 3 - churn \~ credit_score+age+tenure+ balance + active_member+estimated_salary**
+Now for the third model we repeat the same procedure but we use the Cp metric. We have a minimum value of 7 for Cp with the variables credit_score,age,tenure,balance and estimated_salary for the exhaustive search method. We have the same variables associated with Cp for forward, backward and sequential search. Therefore, we choose model3 with features credit_score,age,tenure,balance and estimated_salary
+```{r Model3,results='markup'}
+churnglm3 <- glm(churn ~ credit_score+age+tenure+ balance + estimated_salary, data = churn_data_logit)
+summary(churnglm3)
+xkabledply( confusion_matrix(churnglm3), title = "Confusion matrix from Logit Model-3" )
+prob3=predict(churnglm3, type = "response" )
+churn_data_logit$prob=prob3
+h3 <- roc(churn~prob, data = churn_data_logit)
+auc(h3) 
+plot(h3)
+```
+
+**Model 4 - churn \~ credit_score + country+ gender+age+tenure+balance+estimated_salary**
+For model4, we need to look at Mallow Cp plot in order to understand the feature selection method used for this model. We can see that for a value of 7 for Mallow Cp we have two models overlapping so, we can't quite figure out which model to be chosen. The next best value for Mallow Cp is 7.5 with the following features credit_score,country,gender,age,tenure,balance,estimated_salary. We select these features for model4.
+```{r Model4,results='markup'}
+churnglm4 <- glm(churn ~ credit_score+country+gender+age+tenure+balance+estimated_salary, data = churn_data_logit)
+summary(churnglm4)
+xkabledply( confusion_matrix(churnglm4), title = "Confusion matrix from Logit Model-4" )
+prob4=predict(churnglm4, type = "response" )
+churn_data_logit$prob=prob4
+h4 <- roc(churn~prob, data = churn_data_logit)
+auc(h4) 
+plot(h4)
+```
+
+**Model 5 - churn \~ credit_score+country+gender+age+tenure+balance+active_member+estimated_salary**
+
+```{r Model5,results='markup'}
+churnglm5 <- glm(churn ~ credit_score + country+ gender+age+tenure+balance+active_member+estimated_salary
+, data = churn_data_logit)
+summary(churnglm5)
+xkabledply( confusion_matrix(churnglm5), title = "Confusion matrix from Logit Model-5" )
+prob5=predict(churnglm5, type = "response" )
+churn_data_logit$prob=prob5
+h5 <- roc(churn~prob, data = churn_data_logit)
+auc(h5) 
+plot(h5)
+```
+
+
+### Best Model
+
+**Model 4** - Credit_score, country, gender, age, tenure, balance, active_member,estimated_salary
+
+# Chapter 6 :Summary
+
+When creating a model based solely on customer demographics, only the **age variable** is significant. On the other hand based on salary and account features (number of products, balance, active status), only the **balance variable** is significant.
+
+In our analysis, 90% of variance explained by 9 principle components with a **PC9** Cumulative proportion of variance is 0.92.
+
+Best model **Adj R^2**: Age + Balance, **BIC**: Credit Score + Age + Balance, **Cp**: Credit Score + Age + Balance + Tenure + Est. Salary
+
+Best predictor of customer churn over all: **Model 5**, which includes features Credit_score + country + gender + age + tenure + balance + active_member + estimated_salary is best performing which has comparatively lower False Negatives (1994) and Area under curve (0.745). The reason for choosing **False Negatives** is that we are okay with the model predicting churn for a customer when it is actually retained. However, if a customer is actually churned and our model is predicting that it is retained then it is a problem and the errors in classifications must be highlighted as it is very critical for the bank to correctly identify churned customers. Therefore, the verdict for the best models is decided based on the which model has lower False Negatives.  
+
+# Chapter 7: Bibliography
+
+Kaemingk, D. (2018, August 29). Reducing customer churn for banks and financial institutions. Qualtrics. Retrieved November 2, 2022, from <https://www.qualtrics.com/blog/customer-churn-banking/>
+
+Guliyev, H., & Yerdelen Tatoğlu, F. (2021). Customer churn analysis in banking sector: Evidence from explainable machine learning models. Journal of Applied Microeconometrics, 1(2), 85--99. <https://doi.org/10.53753/jame.1.2.03>
